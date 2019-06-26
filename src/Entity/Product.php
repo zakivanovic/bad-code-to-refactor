@@ -14,7 +14,6 @@ class Product
      * @ORM\Id()
      * @ORM\GeneratedValue(strategy="AUTO")
      * @ORM\Column(type="integer")
-     * @Groups({"list"})
      *
      * @var int
      */
@@ -24,11 +23,17 @@ class Product
      * @ORM\Column(name="`title`", type="string")
      * @Assert\NotBlank()
      * @Assert\Length(min="3", max="250")
-     * @Groups({"list"})
      *
      * @var string
      */
     private $title;
+
+    /**
+     * @ORM\Column(name="`active`", type="boolean")
+     *
+     * @var boolean
+     */
+    private $active;
 
     /**
      * @return int
@@ -52,5 +57,21 @@ class Product
     public function setTitle($title)
     {
         $this->title = $title;
+    }
+
+    /**
+     * @return boolean
+     */
+    public function isActive()
+    {
+        return $this->active;
+    }
+
+    /**
+     * @param boolean active
+     */
+    public function setActive($active)
+    {
+        $this->active = $active;
     }
 }
