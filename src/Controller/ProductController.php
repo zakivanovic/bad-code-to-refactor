@@ -1,98 +1,45 @@
 <?php
 
-
 namespace App\Controller;
 
-use App\Service\FoodProductService;
-use App\Service\HightechProductService;
-use App\Service\OfficeProductService;
+use App\Entity\Product;
+use App\Form\ProductType;
 use Psr\Log\LoggerInterface;
+use App\Service\ProductTypeService;
+use App\Notification\ProductNotification;
 use Symfony\Component\Routing\Annotation\Route;
+use Sensio\Bundle\FrameworkExtraBundle\Configuration\Security;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-
 
 /**
  * @Route("/product", name="product")
  */
-class ProductController  extends AbstractController
+class ProductController extends AbstractController
 {
-    public $logger, $service1, $service2, $service3;
-
-    public function __construct()
-    {
-        $entityManager = $this->getDoctrine()->getManager();
-        $this->service1 = new HightechProductService($entityManager);
-        $this->service2 = new FoodProductService($entityManager);
-        $this->service3 = new OfficeProductService($entityManager);
-    }
-
     /**
-     * @Route("/edit/{id}", name="product_update", methods={"GET"})
+     * @Route("/edit/{id}", name="product_update")
+     * @Security("is_granted('ROLE_ADMIN'), message="tu dois avoir le role ADMIN pour modifier ce produit.")
      */
-    public function updateAction($id)
+    public function updateAction(Request $request, ObjectManager $manager, Product $product, LoggerInterface $logger, ProductTypeService $productype, ProductNotification $notification)
     {
-        $this->logger = $this->container->get('logger');
-        if (false === $this->get('security.context')->isGranted('ROLE_ADMIN')) {
-            throw new AccessDeniedException();
-        }
-
-        $em = $this->getDoctrine()->getManager();
-        $product = $em->getRepository('App:Product')->find($id);
-
-        if (!$product) {
-            throw $this->createNotFoundException('Unable to find Product entity.');
-        }
-
-        $request = $this->getRequest();
-        $productForm = $this->createForm(ProductType::class, $product);
-        $productForm->handleRequest($request);
-
-        if ($productForm->isSubmitted() && $productForm->isValid()) {
+        $form = $this->createForm(ProductType::class, $product);
+        $form->handleRequest($request);
+        if ($form->isSubmitted() && $form->isValid()) {
+            //il faut ajouter le champ LastUpdated dans l'entity Product
             $product->setLastUpdated(new \DateTime);
-            $em->flush();
-            $this->logger->info('Saved!');
+            $manager->persist($product);
+            $manager->flush();
+            $logger->info('Saved!');
+            $notification->notify($product);
+            $productype->logProduct($product);
 
-            $message = \Swift_Message::newInstance()
-                ->setSubject('Product updated')
-                ->setFrom($this->container->get('product_email.from'))
-                ->setTo($this->container->get('product_email.to'))
-                ->setBody($this->render(
-                    'product/email.txt.twig',
-                    array('product' => $product))
-                )
-            ;
-            $this->get('mailer')->send($message);
-
-            $this->logProduct($product);
-
-            return $this->redirect(
-                $this->generateUrl('product', array('id' => $id))
-            );
+            return $this->redirectToRoute('product', [
+                'id' => $product->getId()
+            ]);
         }
-
-        return $this->render(
-            'product/edit.html.twig',
-            array(
-                'product'      => $product,
-                'form'   => $productForm->createView(),
-            )
-        );
-    }
-
-    /**
-     *
-     */
-    private function logProduct($product)
-    {
-        $message = 'produit type '; // @todo internationaliser ce message
-        if($this->service1->checkProductType($product)) {
-            $this->logger->info($message . 'Hightech');
-        }
-        if($this->service2->checkProductType($product)) {
-            $this->logger->info($message .  'Food');
-        }
-        if($this->service3->checkProductType($product)) {
-            $this->logger->info($message .  'Office');
-        }
+        return $this->render('product/edit.html.twig', [
+            'product' => $product,
+            'form' => $form->createView()
+        ]);
     }
 }
